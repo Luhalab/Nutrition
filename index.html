@@ -71,5 +71,97 @@
     });
   }
 </script>
+
+<!-- Backup / Ripristino dati: indipendente dall'app React, legge/scrive
+     direttamente la chiave "nv-app-data" nel localStorage del telefono. -->
+<script>
+(function () {
+  var STORE_KEY = "nv-app-data";
+
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+
+  function makeButton(label, bottom) {
+    var b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText =
+      "position:fixed; right:14px; bottom:" + bottom + "px; z-index:99999;" +
+      "background:#182126; color:#EDEFEF; border:1px solid #28333A;" +
+      "border-radius:10px; padding:9px 14px; font-family:Inter,sans-serif;" +
+      "font-size:12px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,.35);" +
+      "opacity:0.9;";
+    return b;
+  }
+
+  function showToast(msg, isError) {
+    var t = document.createElement("div");
+    t.textContent = msg;
+    t.style.cssText =
+      "position:fixed; left:50%; bottom:90px; transform:translateX(-50%);" +
+      "z-index:100000; background:" + (isError ? "#E2725B" : "#8FBF6B") + ";" +
+      "color:#10160F; padding:10px 16px; border-radius:10px; font-family:Inter,sans-serif;" +
+      "font-size:13px; font-weight:600; max-width:80vw; text-align:center;";
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 3200);
+  }
+
+  function exportBackup() {
+    try {
+      var raw = window.localStorage.getItem(STORE_KEY);
+      if (!raw) { showToast("Nessun dato da esportare ancora.", true); return; }
+      var now = new Date();
+      var fname = "nutrivision-backup-" + now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) + ".json";
+      var blob = new Blob([raw], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      showToast("Backup scaricato: " + fname);
+    } catch (e) {
+      showToast("Errore durante il backup: " + e.message, true);
+    }
+  }
+
+  function importBackup(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(reader.result); // valida che sia JSON corretto
+        if (typeof parsed !== "object" || parsed === null) throw new Error("Formato non valido");
+        window.localStorage.setItem(STORE_KEY, JSON.stringify(parsed));
+        showToast("Dati ripristinati. Ricarico l'app…");
+        setTimeout(function () { location.reload(); }, 1200);
+      } catch (e) {
+        showToast("File non valido: " + e.message, true);
+      }
+    };
+    reader.onerror = function () { showToast("Impossibile leggere il file.", true); };
+    reader.readAsText(file);
+  }
+
+  window.addEventListener("load", function () {
+    var exportBtn = makeButton("⬇️ Backup", 14);
+    exportBtn.addEventListener("click", exportBackup);
+    document.body.appendChild(exportBtn);
+
+    var importBtn = makeButton("⬆️ Ripristina", 56);
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "application/json";
+    fileInput.style.display = "none";
+    fileInput.addEventListener("change", function () {
+      if (fileInput.files && fileInput.files[0]) {
+        if (confirm("Questo sovrascriverà i dati attuali dell'app con quelli del backup. Continuare?")) {
+          importBackup(fileInput.files[0]);
+        }
+      }
+      fileInput.value = "";
+    });
+    importBtn.addEventListener("click", function () { fileInput.click(); });
+    document.body.appendChild(importBtn);
+    document.body.appendChild(fileInput);
+  });
+})();
+</script>
 </body>
 </html>
